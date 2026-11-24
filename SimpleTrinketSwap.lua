@@ -143,11 +143,17 @@ end
 -- put a trinket into a slot, swapping with the other slot if it sits there
 local function Equip(id, slot)
   local other = slot == 13 and 14 or 13
+  ns.Debug("equip item " .. id .. " into slot " .. slot)
   if GetInventoryItemID("player", other) == id then
     PickupInventoryItem(other)
     PickupInventoryItem(slot)
+    -- never leave a trinket on the cursor if the swap failed
+    if CursorHasItem() then
+      ClearCursor()
+    end
   else
-    C_Item.EquipItemByName(id, slot)
+    -- C_Item version where available, global in older clients
+    (C_Item and C_Item.EquipItemByName or EquipItemByName)(id, slot)
   end
 end
 
@@ -181,6 +187,7 @@ local function ScheduleNext(lists)
     end
   end
   if wait then
+    ns.Debug(string.format("next check in %.1f s", wait + 0.5))
     Schedule(wait + 0.5)
   end
 end
@@ -192,6 +199,7 @@ function Apply()
   end
   if CursorHasItem() or UnitIsDeadOrGhost("player") or UnitCastingInfo("player")
     or UnitChannelInfo("player") then
+    ns.Debug("busy, retry in 1 s")
     return Schedule(1)
   end
   local lists = Lists(ActiveKey())
@@ -346,6 +354,23 @@ local function PerCharacter(enabled)
   Status()
 end
 
+-- run the swap check once now, for checking it in game
+local function Test()
+  ns.Print("test: checking the trinket lists now" .. (InCombatLockdown()
+    and ns.Color("warning", " (swaps after combat)") or ""))
+  Run()
+end
+
+-- reset the settings to defaults; the trinket lists stay, the page shows them again
+local function Reset()
+  loading = true
+  ns.ResetSettings()
+  loading = false
+  ShowSet()
+  ns.Success("settings reset to defaults, trinket lists kept")
+  Status()
+end
+
 -- choose the trinket set to edit by name; lists the sets without a name
 local function EditSet(name)
   if not name then
@@ -464,9 +489,11 @@ end
 -- one frame dispatching all events above
 local frame = CreateFrame("Frame")
 for event in pairs(events) do
-  frame:RegisterEvent(event)
+  -- skip events this client does not know
+  if C_EventUtils.IsEventValid(event) then frame:RegisterEvent(event) end
 end
 frame:SetScript("OnEvent", function(_, event, ...)
+  ns.Debug(event)
   events[event](...)
 end)
 
@@ -532,6 +559,17 @@ ns.Command({
   help = "use settings for this character only, or the account's",
   args = { { name = "state", choices = { "on", "off" } } },
   run = function(args) PerCharacter(args.state == "on") end,
+})
+ns.Command({ name = "test", help = "check the trinket lists and swap once now", run = Test })
+ns.Command({ name = "reset", help = "reset the active profile's settings to defaults", run = Reset })
+ns.Command({
+  name = "debug",
+  help = "show what the addon does in chat, until /reload",
+  args = { { name = "state", choices = { "on", "off" } } },
+  run = function(args)
+    ns.debug = args.state == "on"
+    ns.Status("debug", ns.OnOff(ns.debug))
+  end,
 })
 ns.Command({ name = "config", help = "open the settings page", run = ns.OpenSettings })
 ns.Slash({ "/sts", "/simpletrinketswap" }, Status)
