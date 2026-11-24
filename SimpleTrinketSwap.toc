@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: SimpleTrinketSwap
 ## Notes: Swaps on-use trinkets by a priority list per slot whenever you leave combat
 ## Author: tf4482

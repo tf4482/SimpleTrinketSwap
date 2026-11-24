@@ -29,7 +29,7 @@ No screenshots yet.
 
 1. Download `SimpleTrinketSwap-vX.Y.Z.zip` from the
    [releases](https://github.com/tf4482/SimpleTrinketSwap/releases) (or CurseForge, Wago).
-2. Unzip it into `World of Warcraft/_retail_/Interface/AddOns/`.
+2. Unzip it into `World of Warcraft/_forever_/Interface/AddOns/`.
 3. Restart the game or type `/reload`.
 
 ## Usage
@@ -43,6 +43,9 @@ No screenshots yet.
 /sts slot <1|2> [id ...]    replace a slot list with up to five item IDs; none clears it
 /sts character on           use settings for this character only
 /sts character off          use the account settings again
+/sts test                   check the lists and swap once now
+/sts reset                  reset the settings to defaults; trinket lists stay
+/sts debug on               show what the addon does, until /reload
 /sts config                 open the settings page
 /sts help                   list all commands
 ```
@@ -56,6 +59,8 @@ No screenshots yet.
   page, do the same for "PvP"; equipping a set switches the lists too.
 - Edit a set by chat: `/sts set "Raid DD"`, then `/sts slot 1 12345 23456`.
 - Turn swapping off for a fight with fixed gear: `/sts off`, later `/sts on`.
+- Check a list right after editing it: `/sts test`; with `/sts debug on` chat shows each
+  swap and the next check.
 
 ## Develop
 
@@ -66,8 +71,11 @@ Check the code with [Luacheck](https://github.com/lunarmodules/luacheck) before 
 luacheck .
 ```
 
-Release: push an annotated tag `vX.Y.Z`; GitHub Actions packages the addon with the
-BigWigs packager and publishes it.
+Deploy locally: run `deploy.bat`; it builds `release/SimpleTrinketSwap-vX.Y.Z.zip` from
+`VERSION`.
+
+Release: set `VERSION` to `X.Y.Z`, then push an annotated tag `vX.Y.Z`; GitHub Actions
+packages the addon with the BigWigs packager and publishes it.
 
 ## License
 
