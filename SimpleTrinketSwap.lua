@@ -146,8 +146,13 @@ local function Equip(id, slot)
   if GetInventoryItemID("player", other) == id then
     PickupInventoryItem(other)
     PickupInventoryItem(slot)
+    -- never leave a trinket on the cursor if the swap failed
+    if CursorHasItem() then
+      ClearCursor()
+    end
   else
-    C_Item.EquipItemByName(id, slot)
+    -- C_Item version where available, global in older clients
+    (C_Item and C_Item.EquipItemByName or EquipItemByName)(id, slot)
   end
 end
 
