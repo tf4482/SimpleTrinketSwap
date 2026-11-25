@@ -35,6 +35,7 @@ read_globals = {
   "EquipItemByName",
   "GameTooltip",
   "SettingsDropdownControlMixin",
+  "SettingsPanel",
   "SettingsTooltip",
   "UIParent",
   "GetInventoryItemID",
