@@ -218,6 +218,11 @@ function Apply()
   if ns.db == nil or not ns.Get("enabled") then
     return
   end
+  -- mounted: leave the trinkets to addons that equip mount gear
+  if ns.Get("mountPause") and IsMounted() then
+    ns.Debug("mounted, swaps paused")
+    return
+  end
   if CursorHasItem() or UnitIsDeadOrGhost("player") or UnitCastingInfo("player")
     or UnitChannelInfo("player") then
     ns.Debug("busy, retry in 1 s")
@@ -502,6 +507,7 @@ local function Status()
   end
   ns.Print("swapping " .. ns.OnOff(ns.Get("enabled")) .. hint)
   ns.Status("per character", ns.OnOff(ns.char.perCharacter))
+  ns.Status("pause while mounted", ns.OnOff(ns.Get("mountPause")))
   ns.Status("active set", SetName(ActiveKey()))
   ns.Status("edited set", SetName(ns.Get("editSet")))
   PrintLists(ns.Get("editSet"))
@@ -632,6 +638,11 @@ function events.PLAYER_EQUIPMENT_CHANGED()
   Refresh()
 end
 
+-- mounted or dismounted; after dismounting, mount gear addons swap back first
+function events.PLAYER_MOUNT_DISPLAY_CHANGED()
+  Schedule(1)
+end
+
 -- zoning
 function events.PLAYER_ENTERING_WORLD()
   Refresh()
@@ -665,8 +676,8 @@ end)
 -- trinket sets with their slot lists, the active set, and hold times by item, per character
 ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT, hold = {} }, nil, "char")
 
--- saved settings: off, default set edited, empty positions
-local defaults = { enabled = false, editSet = DEFAULT }
+-- saved settings: off, no mount pause, default set edited, empty positions
+local defaults = { enabled = false, mountPause = false, editSet = DEFAULT }
 for _, slot in ipairs(SLOTS) do
   for position = 1, POSITIONS do
     defaults[Key(slot, position)] = 0
@@ -680,6 +691,8 @@ ns.Store(ADDON .. "DB", defaults, function()
   ShowSet()
   ns.Settings()
   ns.Checkbox("enabled", "Enabled", "Swap trinkets by priority whenever out of combat", Refresh)
+  ns.Checkbox("mountPause", "Pause while mounted",
+    "No swaps while mounted, so addons that equip mount gear are not disturbed", Refresh)
   ns.Dropdown("editSet", "Trinket set", setChoices,
     "Trinket set shown below; each equipment set has its own, Default is used without one",
     OnEditSet)
@@ -707,6 +720,15 @@ end
 -- chat commands
 ns.Command({ name = "on", help = "turn swapping on", run = function() Switch(true) end })
 ns.Command({ name = "off", help = "turn swapping off", run = function() Switch(false) end })
+ns.Command({
+  name = "mount",
+  help = "pause swaps while mounted, or swap also when mounted",
+  args = { { name = "state", choices = { "on", "off" } } },
+  run = function(args)
+    ns.Set("mountPause", args.state == "on")
+    Status()
+  end,
+})
 ns.Command({
   name = "set",
   help = "edit the trinket set of an equipment set (\"quoted name\" or default); lists sets",
