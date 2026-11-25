@@ -9,6 +9,8 @@ local SLOT_NAMES = { [13] = "Trinket 1", [14] = "Trinket 2" }
 local POSITIONS = 5
 -- equipping starts a 30 s cooldown, so less remaining counts as ready
 local READY = 30
+-- seconds between checks while a buff without end time runs
+local BUFF_RECHECK = 5
 -- key of the trinket set used without an active equipment set
 local DEFAULT = "default"
 -- prefix of trinket set keys tied to an equipment set name
@@ -192,7 +194,41 @@ local function ScheduleNext(lists)
   end
 end
 
--- one swap per pass, slot 1 picks first; the equipment event starts the next pass
+-- trinket whose use effect started last: latest cooldown start longer than the equip cooldown
+local function LastUsed(lists)
+  local last, latest
+  local function Consider(id)
+    local start, duration = C_Item.GetItemCooldown(id)
+    if start and duration > READY and (not latest or start > latest) then
+      last, latest = id, start
+    end
+  end
+  Consider(GetInventoryItemID("player", 13))
+  Consider(GetInventoryItemID("player", 14))
+  for _, slot in ipairs(SLOTS) do
+    for _, id in ipairs(lists[slot]) do
+      Consider(id)
+    end
+  end
+  return last
+end
+
+-- seconds the buff named like the last used trinket still runs; nil without such a buff
+local function BuffLeft(lists)
+  local id = LastUsed(lists)
+  local name = id and C_Item.GetItemNameByID(id)
+  local aura = name and C_UnitAuras.GetAuraDataBySpellName("player", name, "HELPFUL")
+  if not aura then
+    return nil
+  end
+  if aura.expirationTime == 0 then
+    return BUFF_RECHECK
+  end
+  return math.max(0, aura.expirationTime - GetTime())
+end
+
+-- one swap per pass, slot 1 picks first, but never while the last trinket's buff runs;
+-- the equipment event starts the next pass
 function Apply()
   if ns.db == nil or not ns.Get("enabled") then
     return
@@ -205,12 +241,21 @@ function Apply()
   local lists = Lists(ActiveKey())
   local first = Choose(lists[13], 13)
   local second = Choose(lists[14], 14, first)
+  local id, slot
   if first and GetInventoryItemID("player", 13) ~= first then
-    return Equip(first, 13)
+    id, slot = first, 13
   elseif second and GetInventoryItemID("player", 14) ~= second then
-    return Equip(second, 14)
+    id, slot = second, 14
   end
-  ScheduleNext(lists)
+  if not id then
+    return ScheduleNext(lists)
+  end
+  local left = BuffLeft(lists)
+  if left then
+    ns.Debug(string.format("trinket buff runs, swap in %.1f s", left + 0.1))
+    return Schedule(left + 0.1)
+  end
+  Equip(id, slot)
 end
 
 -- refill the item dropdown choices: none, owned trinkets, and every listed trinket

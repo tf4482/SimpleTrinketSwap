@@ -29,6 +29,7 @@ read_globals = {
   "C_EquipmentSet",
   "C_Item",
   "C_Timer",
+  "C_UnitAuras",
   "ClearCursor",
   "CursorHasItem",
   "EquipItemByName",

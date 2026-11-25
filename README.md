@@ -12,6 +12,8 @@ are out of combat.
 - **Automatic swaps** - out of combat, each slot gets the highest-priority trinket that is
   ready (less than 30 s cooldown left, the time equipping adds anyway); in combat the swap
   waits until combat ends. An empty list leaves its slot alone.
+- **Buff wait** - while a buff named like the last used trinket is active, swapping waits
+  until the buff ends, so no effect is cut short.
 - **Trinket sets** - one set per equipment set of the game's equipment manager; equipping
   an equipment set activates its trinket set. Without equipment sets there is only the
   Default set.

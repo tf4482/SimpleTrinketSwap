@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Swapping waits while a buff named like the last used trinket is active
+
 ## [0.1.0] - 2026-11-24
 
 ### Added
