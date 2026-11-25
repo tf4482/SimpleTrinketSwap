@@ -9,8 +9,6 @@ local SLOT_NAMES = { [13] = "Trinket 1", [14] = "Trinket 2" }
 local POSITIONS = 5
 -- equipping starts a 30 s cooldown, so less remaining counts as ready
 local READY = 30
--- seconds between checks while a buff without end time runs
-local BUFF_RECHECK = 5
 -- key of the trinket set used without an active equipment set
 local DEFAULT = "default"
 -- prefix of trinket set keys tied to an equipment set name
@@ -177,9 +175,29 @@ local function Refresh()
   Schedule(0.1)
 end
 
--- recheck when the next listed trinket becomes ready
-local function ScheduleNext(lists)
+-- seconds an equipped trinket must still stay on: its hold time counted from its last use,
+-- also through combat; 0 without hold time or use
+local function HoldLeft(id)
+  local hold = id and ns.char.hold[id]
+  if not hold then
+    return 0
+  end
+  local start, duration = C_Item.GetItemCooldown(id)
+  -- the equip cooldown is no use
+  if not start or start == 0 or duration <= READY then
+    return 0
+  end
+  return math.max(0, start + hold - GetTime())
+end
+
+-- recheck when the next listed trinket becomes ready or a hold time ends
+local function ScheduleNext(lists, holds)
   local wait
+  for _, left in ipairs(holds) do
+    if left > 0 and (not wait or left < wait) then
+      wait = left
+    end
+  end
   for _, slot in ipairs(SLOTS) do
     for _, id in ipairs(lists[slot]) do
       local left = Remaining(id) - READY
@@ -194,40 +212,7 @@ local function ScheduleNext(lists)
   end
 end
 
--- trinket whose use effect started last: latest cooldown start longer than the equip cooldown
-local function LastUsed(lists)
-  local last, latest
-  local function Consider(id)
-    local start, duration = C_Item.GetItemCooldown(id)
-    if start and duration > READY and (not latest or start > latest) then
-      last, latest = id, start
-    end
-  end
-  Consider(GetInventoryItemID("player", 13))
-  Consider(GetInventoryItemID("player", 14))
-  for _, slot in ipairs(SLOTS) do
-    for _, id in ipairs(lists[slot]) do
-      Consider(id)
-    end
-  end
-  return last
-end
-
--- seconds the buff named like the last used trinket still runs; nil without such a buff
-local function BuffLeft(lists)
-  local id = LastUsed(lists)
-  local name = id and C_Item.GetItemNameByID(id)
-  local aura = name and C_UnitAuras.GetAuraDataBySpellName("player", name, "HELPFUL")
-  if not aura then
-    return nil
-  end
-  if aura.expirationTime == 0 then
-    return BUFF_RECHECK
-  end
-  return math.max(0, aura.expirationTime - GetTime())
-end
-
--- one swap per pass, slot 1 picks first, but never while the last trinket's buff runs;
+-- one swap per pass, slot 1 picks first; a trinket in its hold time stays where it is;
 -- the equipment event starts the next pass
 function Apply()
   if ns.db == nil or not ns.Get("enabled") then
@@ -239,23 +224,17 @@ function Apply()
     return Schedule(1)
   end
   local lists = Lists(ActiveKey())
-  local first = Choose(lists[13], 13)
-  local second = Choose(lists[14], 14, first)
-  local id, slot
-  if first and GetInventoryItemID("player", 13) ~= first then
-    id, slot = first, 13
-  elseif second and GetInventoryItemID("player", 14) ~= second then
-    id, slot = second, 14
+  local current13 = GetInventoryItemID("player", 13)
+  local current14 = GetInventoryItemID("player", 14)
+  local hold13, hold14 = HoldLeft(current13), HoldLeft(current14)
+  local first = hold13 > 0 and current13 or Choose(lists[13], 13, hold14 > 0 and current14 or nil)
+  local second = hold14 > 0 and current14 or Choose(lists[14], 14, first)
+  if first and current13 ~= first then
+    return Equip(first, 13)
+  elseif second and current14 ~= second then
+    return Equip(second, 14)
   end
-  if not id then
-    return ScheduleNext(lists)
-  end
-  local left = BuffLeft(lists)
-  if left then
-    ns.Debug(string.format("trinket buff runs, swap in %.1f s", left + 0.1))
-    return Schedule(left + 0.1)
-  end
-  Equip(id, slot)
+  ScheduleNext(lists, { hold13, hold14 })
 end
 
 -- refill the item dropdown choices: none, owned trinkets, and every listed trinket
@@ -315,6 +294,95 @@ local function RebuildSetChoices()
   end
 end
 
+-- position key by settings variable, for the hold time boxes
+local positionKeys = {}
+for _, slot in ipairs(SLOTS) do
+  for position = 1, POSITIONS do
+    positionKeys[ADDON .. "_" .. Key(slot, position)] = Key(slot, position)
+  end
+end
+-- hold time box by settings row frame; rows are recycled, so each box follows its row
+local holdBoxes = {}
+
+-- show the hold time of the trinket in the box's row; hidden for none and passive trinkets
+local function UpdateBox(box)
+  local id = box.key and ns.Get(box.key)
+  if not id or id == 0 or IsPassive(id) then
+    return box:Hide()
+  end
+  box:SetText(tostring(ns.char.hold[id] or 0))
+  box:Show()
+end
+
+-- refresh every hold time box on the page
+local function UpdateBoxes()
+  for _, box in pairs(holdBoxes) do
+    UpdateBox(box)
+  end
+end
+
+-- store a trinket's hold time; 0 removes it
+local function SetHold(id, seconds)
+  ns.char.hold[id] = seconds > 0 and seconds or nil
+  UpdateBoxes()
+  Refresh()
+end
+
+-- small seconds box right of a position dropdown
+local function CreateHoldBox(row)
+  local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+  box:SetSize(32, 20)
+  box:SetPoint("LEFT", row.Control.IncrementButton, "RIGHT", 14, 0)
+  box:SetAutoFocus(false)
+  box:SetNumeric(true)
+  box:SetMaxLetters(3)
+  box:SetJustifyH("CENTER")
+  local unit = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  unit:SetPoint("LEFT", box, "RIGHT", 4, 0)
+  unit:SetText("s")
+  box:SetScript("OnEnterPressed", box.ClearFocus)
+  box:SetScript("OnEscapePressed", function(self)
+    UpdateBox(self)
+    self:ClearFocus()
+  end)
+  box:SetScript("OnEditFocusLost", function(self)
+    local id = self.key and ns.Get(self.key)
+    if id and id ~= 0 then
+      SetHold(id, tonumber(self:GetText()) or 0)
+    end
+  end)
+  box:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Hold time")
+    GameTooltip:AddLine("Seconds this trinket stays equipped after its use, also counted"
+      .. " during combat; 0 = swap as soon as possible", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  box:SetScript("OnLeave", GameTooltip_Hide)
+  holdBoxes[row] = box
+  return box
+end
+
+-- add the hold time box to position rows of the settings page as they are shown
+local function OnRowInit(row)
+  local setting = row:GetSetting()
+  local key = setting and positionKeys[setting:GetVariable()]
+  local box = holdBoxes[row]
+  if not key then
+    if box then
+      box.key = nil
+      box:Hide()
+    end
+    return
+  end
+  box = box or CreateHoldBox(row)
+  box.key = key
+  UpdateBox(box)
+end
+if SettingsDropdownControlMixin then
+  hooksecurefunc(SettingsDropdownControlMixin, "Init", OnRowInit)
+end
+
 -- copy the edited set's lists into the position settings and redraw the page; both
 -- profiles get the same values, so a profile switch keeps the lists
 local function ShowSet()
@@ -332,6 +400,7 @@ local function ShowSet()
     end
   end
   loading = false
+  UpdateBoxes()
 end
 
 -- store a slot list of the edited set, then update page and equipment
@@ -367,7 +436,9 @@ local function PrintLists(key)
   for _, slot in ipairs(SLOTS) do
     local names = {}
     for index, id in ipairs(lists[slot]) do
+      local hold = ns.char.hold[id]
       names[index] = index .. ". " .. ItemText(id)
+        .. (hold and ns.Color("muted", " (hold " .. hold .. " s)") or "")
     end
     local text = #names > 0 and table.concat(names, ", ") or ns.Color("muted", "empty, not swapped")
     ns.Detail(ns.Color("command", SLOT_NAMES[slot]) .. ": " .. text)
@@ -542,8 +613,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
   events[event](...)
 end)
 
--- trinket sets with their slot lists and the active set, per character
-ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT }, nil, "char")
+-- trinket sets with their slot lists, the active set, and hold times by item, per character
+ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT, hold = {} }, nil, "char")
 
 -- saved settings: off, default set edited, empty positions
 local defaults = { enabled = false, editSet = DEFAULT }
@@ -598,6 +669,18 @@ ns.Command({
   help = "replace the edited set's list for trinket slot 1 or 2 with item IDs; none clears it",
   args = itemArgs,
   run = SetList,
+})
+ns.Command({
+  name = "hold",
+  help = "seconds a trinket stays equipped after its use; 0 removes the hold time",
+  args = {
+    { name = "itemID", type = "number", min = 1 },
+    { name = "seconds", type = "number", min = 0, max = 999 },
+  },
+  run = function(args)
+    SetHold(args.itemID, math.floor(args.seconds))
+    ns.Status("hold time of " .. ItemText(args.itemID), math.floor(args.seconds) .. " s")
+  end,
 })
 ns.Command({
   name = "character",
