@@ -5,8 +5,9 @@ are out of combat.
 
 ## Features
 
-- **Priority list per slot** - up to five trinkets for each trinket slot; a trinket may
-  be in both lists, slot 1 picks first.
+- **Priority list per slot** - up to ten trinkets for each trinket slot; a trinket may
+  be in both lists, slot 1 picks first. The settings page shows one empty position more
+  than are filled.
 - **Passive filler** - one trinket without use effect per list, always last; it is worn
   while every on-use trinket above it is on cooldown.
 - **Automatic swaps** - out of combat, each slot gets the highest-priority trinket that is
@@ -46,7 +47,7 @@ No screenshots yet.
 /sts mount <on|off>         pause swaps while mounted, or not
 /sts set                    list the trinket sets
 /sts set <name|default>     edit the trinket set of an equipment set
-/sts slot <1|2> [id ...]    replace a slot list with up to five item IDs; none clears it
+/sts slot <1|2> [id ...]    replace a slot list with up to ten item IDs; none clears it
 /sts hold <id> <seconds>    keep a trinket equipped that long after its use; 0 = off
 /sts character on           use settings for this character only
 /sts character off          use the account settings again
