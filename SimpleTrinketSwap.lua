@@ -304,6 +304,36 @@ end
 -- hold time box by settings row frame; rows are recycled, so each box follows its row
 local holdBoxes = {}
 
+-- item tooltip shown above the info tooltip of a position row
+local itemTip = CreateFrame("GameTooltip", ADDON .. "ItemTooltip", UIParent, "GameTooltipTemplate")
+
+-- show the item tooltip of a row's trinket above another tooltip; nothing for none
+local function ShowItemTip(above, key)
+  local id = ns.Get(key)
+  if id == 0 then
+    return
+  end
+  itemTip:SetOwner(above, "ANCHOR_NONE")
+  itemTip:ClearAllPoints()
+  itemTip:SetPoint("BOTTOMLEFT", above, "TOPLEFT", 0, 2)
+  itemTip:SetItemByID(id)
+  itemTip:Show()
+end
+
+-- position key of the row a frame belongs to, searching a few parents up
+local function RowKey(frame)
+  for _ = 1, 4 do
+    if not frame then
+      return nil
+    end
+    local box = holdBoxes[frame]
+    if box then
+      return box.key
+    end
+    frame = frame:GetParent()
+  end
+end
+
 -- show the hold time of the trinket in the box's row; hidden for none and passive trinkets
 local function UpdateBox(box)
   local id = box.key and ns.Get(box.key)
@@ -357,8 +387,14 @@ local function CreateHoldBox(row)
     GameTooltip:AddLine("Seconds this trinket stays equipped after its use, also counted"
       .. " during combat; 0 = swap as soon as possible", 1, 1, 1, true)
     GameTooltip:Show()
+    if self.key then
+      ShowItemTip(GameTooltip, self.key)
+    end
   end)
-  box:SetScript("OnLeave", GameTooltip_Hide)
+  box:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+    itemTip:Hide()
+  end)
   holdBoxes[row] = box
   return box
 end
@@ -381,6 +417,19 @@ local function OnRowInit(row)
 end
 if SettingsDropdownControlMixin then
   hooksecurefunc(SettingsDropdownControlMixin, "Init", OnRowInit)
+end
+
+-- item tooltip above the settings tooltip of a position row, hidden with it
+if SettingsTooltip then
+  SettingsTooltip:HookScript("OnShow", function(self)
+    local key = RowKey(self:GetOwner())
+    if key then
+      ShowItemTip(self, key)
+    end
+  end)
+  SettingsTooltip:HookScript("OnHide", function()
+    itemTip:Hide()
+  end)
 end
 
 -- copy the edited set's lists into the position settings and redraw the page; both
