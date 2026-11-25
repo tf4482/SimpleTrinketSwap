@@ -20,7 +20,8 @@ are out of combat.
 - **Remembered** - settings are saved per account, or per character with one checkbox;
   default is off. Trinket sets are always saved per character.
 - **Settings page** - all options, including the lists, in the game menu under
-  Options > AddOns, also opened from the addon compartment menu.
+  Options > AddOns, also opened from the addon compartment menu; hovering a trinket shows
+  its item tooltip above the help text.
 - **Chat commands** - every option can also be changed by slash command.
 
 ## Screenshots
