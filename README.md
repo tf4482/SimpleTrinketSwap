@@ -12,8 +12,8 @@ are out of combat.
 - **Automatic swaps** - out of combat, each slot gets the highest-priority trinket that is
   ready (less than 30 s cooldown left, the time equipping adds anyway); in combat the swap
   waits until combat ends. An empty list leaves its slot alone.
-- **Buff wait** - while a buff named like the last used trinket is active, swapping waits
-  until the buff ends, so no effect is cut short.
+- **Hold time** - a seconds box next to each trinket on the settings page: after its use
+  the trinket stays equipped that long, counted also during combat.
 - **Trinket sets** - one set per equipment set of the game's equipment manager; equipping
   an equipment set activates its trinket set. Without equipment sets there is only the
   Default set.
@@ -43,6 +43,7 @@ No screenshots yet.
 /sts set                    list the trinket sets
 /sts set <name|default>     edit the trinket set of an equipment set
 /sts slot <1|2> [id ...]    replace a slot list with up to five item IDs; none clears it
+/sts hold <id> <seconds>    keep a trinket equipped that long after its use; 0 = off
 /sts character on           use settings for this character only
 /sts character off          use the account settings again
 /sts test                   check the lists and swap once now
@@ -60,6 +61,8 @@ No screenshots yet.
 - Raid and PvP gear: equip your "Raid" equipment set, pick the trinkets on the settings
   page, do the same for "PvP"; equipping a set switches the lists too.
 - Edit a set by chat: `/sts set "Raid DD"`, then `/sts slot 1 12345 23456`.
+- A trinket whose effect needs it worn for 20 s after use: enter 20 in the box next to it,
+  or `/sts hold 12345 20`.
 - Turn swapping off for a fight with fixed gear: `/sts off`, later `/sts on`.
 - Check a list right after editing it: `/sts test`; with `/sts debug on` chat shows each
   swap and the next check.
