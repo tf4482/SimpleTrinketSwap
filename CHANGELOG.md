@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-11-26
+
+### Fixed
+
+- Lua errors on loading that left the settings page and swapping without function
+
 ## [0.2.0] - 2026-11-26
 
 ### Added
