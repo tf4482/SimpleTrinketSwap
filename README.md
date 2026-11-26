@@ -12,6 +12,8 @@ are out of combat.
 - **Automatic swaps** - out of combat, each slot gets the highest-priority trinket that is
   ready (less than 30 s cooldown left, the time equipping adds anyway); in combat the swap
   waits until combat ends. An empty list leaves its slot alone.
+- **Mount pause** - optionally no swaps while mounted, so addons that equip mount gear
+  are not disturbed.
 - **Hold time** - a seconds box next to each trinket on the settings page: after its use
   the trinket stays equipped that long, counted also during combat.
 - **Trinket sets** - one set per equipment set of the game's equipment manager; equipping
@@ -41,6 +43,7 @@ No screenshots yet.
 /sts                        show the state and the edited set's lists
 /sts on                     turn swapping on
 /sts off                    turn swapping off
+/sts mount <on|off>         pause swaps while mounted, or not
 /sts set                    list the trinket sets
 /sts set <name|default>     edit the trinket set of an equipment set
 /sts slot <1|2> [id ...]    replace a slot list with up to five item IDs; none clears it

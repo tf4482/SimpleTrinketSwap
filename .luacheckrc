@@ -19,6 +19,7 @@ read_globals = {
   "GetTime",
   "hooksecurefunc",
   "InCombatLockdown",
+  "IsMounted",
   "IsInGroup",
   "IsInInstance",
   "IsInRaid",
