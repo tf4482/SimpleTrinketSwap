@@ -680,44 +680,28 @@ frame:SetScript("OnEvent", function(_, event, ...)
   events[event](...)
 end)
 
--- everything is saved per character: settings (off, no mount pause, default set edited,
--- empty positions), trinket sets, active set, and hold times by item; _version 1 marks
--- data from before settings moved out of the account store
-local defaults = {
-  _version = 1, enabled = false, mountPause = false, editSet = DEFAULT,
-  sets = {}, activeSet = DEFAULT, hold = {},
-}
+-- trinket sets with their slot lists, the active set, and hold times by item, per character
+ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT, hold = {} }, nil, "char")
+
+-- setting defaults: off, no mount pause, default set edited, empty positions; the values
+-- themselves are saved per character, see below
+local defaults = { enabled = false, mountPause = false, editSet = DEFAULT }
 for _, slot in ipairs(SLOTS) do
   for position = 1, POSITIONS do
     defaults[Key(slot, position)] = 0
   end
 end
-ns.Store(ADDON .. "CharDB", defaults, nil, "char")
 
--- take the switches over from the account store once; trinket lists were always per
--- character
-local function Migrate()
-  local char = ns.char
-  if char._version < 2 then
-    for _, key in ipairs({ "enabled", "mountPause" }) do
-      if not char.perCharacter and ns.db[key] ~= nil then
-        char[key] = ns.db[key]
-      end
-    end
-    char.perCharacter = false
-    char._version = 2
-  end
-end
-
--- account store only kept for the migration; settings page and first check once loaded
-ns.Store(ADDON .. "DB", {}, function()
-  Migrate()
+-- settings page and first check once loaded
+ns.Store(ADDON .. "DB", defaults, function()
+  -- this addon is always per character: the shared profile switch stays on, so settings
+  -- live in the character store; unset ones fall back to account values of older versions
+  ns.char.perCharacter = true
   RebuildSetChoices()
   RebuildItemChoices()
   ShowSet()
   ns.Settings()
-  -- this addon is always per character: hide the shared "Per character" checkbox, which
-  -- ns.Settings() adds first
+  -- hide the shared "Per character" checkbox, which ns.Settings() adds first
   local initializers = SettingsPanel:GetLayout(ns.Category):GetInitializers()
   initializers[1]:AddShownPredicate(function()
     return false
