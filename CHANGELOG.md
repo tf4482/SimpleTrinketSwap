@@ -8,7 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- Swapping waits while a buff named like the last used trinket is active
+- Hold time per trinket: seconds it stays equipped after its use, set next to each
+  trinket on the settings page or with `/sts hold`
+- Item tooltip above the help tooltip of each trinket on the settings page
 
 ## [0.1.0] - 2026-11-24
 
