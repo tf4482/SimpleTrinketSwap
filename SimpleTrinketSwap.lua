@@ -5,8 +5,8 @@ local ADDON, ns = ...
 -- trinket inventory slots and their labels
 local SLOTS = { 13, 14 }
 local SLOT_NAMES = { [13] = "Trinket 1", [14] = "Trinket 2" }
--- priority positions per slot list on the settings page
-local POSITIONS = 5
+-- priority positions per slot list; the settings page shows one more than are filled
+local POSITIONS = 10
 -- equipping starts a 30 s cooldown, so less remaining counts as ready
 local READY = 30
 -- key of the trinket set used without an active equipment set
@@ -79,7 +79,7 @@ local function ItemText(id)
   local name = C_Item.GetItemNameByID(id)
   if not name then
     requested[id] = true
-    C_Item.RequestLoadItemData(id)
+    C_Item.RequestLoadItemDataByID(id)
     name = "item " .. id
   end
   return "|T" .. (C_Item.GetItemIconByID(id) or 134400) .. ":0|t " .. name
@@ -175,9 +175,29 @@ local function Refresh()
   Schedule(0.1)
 end
 
--- recheck when the next listed trinket becomes ready
-local function ScheduleNext(lists)
+-- seconds an equipped trinket must still stay on: its hold time counted from its last use,
+-- also through combat; 0 without hold time or use
+local function HoldLeft(id)
+  local hold = id and ns.char.hold[id]
+  if not hold then
+    return 0
+  end
+  local start, duration = C_Item.GetItemCooldown(id)
+  -- the equip cooldown is no use
+  if not start or start == 0 or duration <= READY then
+    return 0
+  end
+  return math.max(0, start + hold - GetTime())
+end
+
+-- recheck when the next listed trinket becomes ready or a hold time ends
+local function ScheduleNext(lists, holds)
   local wait
+  for _, left in ipairs(holds) do
+    if left > 0 and (not wait or left < wait) then
+      wait = left
+    end
+  end
   for _, slot in ipairs(SLOTS) do
     for _, id in ipairs(lists[slot]) do
       local left = Remaining(id) - READY
@@ -192,9 +212,15 @@ local function ScheduleNext(lists)
   end
 end
 
--- one swap per pass, slot 1 picks first; the equipment event starts the next pass
+-- one swap per pass, slot 1 picks first; a trinket in its hold time stays where it is;
+-- the equipment event starts the next pass
 function Apply()
   if ns.db == nil or not ns.Get("enabled") then
+    return
+  end
+  -- mounted: leave the trinkets to addons that equip mount gear
+  if ns.Get("mountPause") and IsMounted() then
+    ns.Debug("mounted, swaps paused")
     return
   end
   if CursorHasItem() or UnitIsDeadOrGhost("player") or UnitCastingInfo("player")
@@ -203,14 +229,17 @@ function Apply()
     return Schedule(1)
   end
   local lists = Lists(ActiveKey())
-  local first = Choose(lists[13], 13)
-  local second = Choose(lists[14], 14, first)
-  if first and GetInventoryItemID("player", 13) ~= first then
+  local current13 = GetInventoryItemID("player", 13)
+  local current14 = GetInventoryItemID("player", 14)
+  local hold13, hold14 = HoldLeft(current13), HoldLeft(current14)
+  local first = hold13 > 0 and current13 or Choose(lists[13], 13, hold14 > 0 and current14 or nil)
+  local second = hold14 > 0 and current14 or Choose(lists[14], 14, first)
+  if first and current13 ~= first then
     return Equip(first, 13)
-  elseif second and GetInventoryItemID("player", 14) ~= second then
+  elseif second and current14 ~= second then
     return Equip(second, 14)
   end
-  ScheduleNext(lists)
+  ScheduleNext(lists, { hold13, hold14 })
 end
 
 -- refill the item dropdown choices: none, owned trinkets, and every listed trinket
@@ -270,8 +299,161 @@ local function RebuildSetChoices()
   end
 end
 
--- copy the edited set's lists into the position settings and redraw the page; both
--- profiles get the same values, so a profile switch keeps the lists
+-- position key by settings variable, for the hold time boxes
+local positionKeys = {}
+for _, slot in ipairs(SLOTS) do
+  for position = 1, POSITIONS do
+    positionKeys[ADDON .. "_" .. Key(slot, position)] = Key(slot, position)
+  end
+end
+-- hold time box by settings row frame; rows are recycled, so each box follows its row
+local holdBoxes = {}
+-- dropdown width of settings rows: Blizzard's, and ours a bit wider than it with arrows
+local DEFAULT_DROPDOWN = 220
+local WIDE_DROPDOWN = 290
+-- settings rows whose dropdown this addon widened
+local widened = {}
+
+-- item tooltip shown above the info tooltip of a position row
+local itemTip = CreateFrame("GameTooltip", ADDON .. "ItemTooltip", UIParent, "GameTooltipTemplate")
+
+-- show the item tooltip of a row's trinket above another tooltip; nothing for none
+local function ShowItemTip(above, key)
+  local id = ns.Get(key)
+  if id == 0 then
+    return
+  end
+  itemTip:SetOwner(above, "ANCHOR_NONE")
+  itemTip:ClearAllPoints()
+  itemTip:SetPoint("BOTTOMLEFT", above, "TOPLEFT", 0, 2)
+  itemTip:SetItemByID(id)
+  itemTip:Show()
+end
+
+-- position key of the row a frame belongs to, searching a few parents up
+local function RowKey(frame)
+  for _ = 1, 4 do
+    if not frame then
+      return nil
+    end
+    local box = holdBoxes[frame]
+    if box then
+      return box.key
+    end
+    frame = frame:GetParent()
+  end
+end
+
+-- show the hold time of the trinket in the box's row; hidden for none and passive trinkets
+local function UpdateBox(box)
+  local id = box.key and ns.Get(box.key)
+  if not id or id == 0 or IsPassive(id) then
+    return box:Hide()
+  end
+  box:SetText(tostring(ns.char.hold[id] or 0))
+  box:Show()
+end
+
+-- refresh every hold time box on the page
+local function UpdateBoxes()
+  for _, box in pairs(holdBoxes) do
+    UpdateBox(box)
+  end
+end
+
+-- store a trinket's hold time; 0 removes it
+local function SetHold(id, seconds)
+  ns.char.hold[id] = seconds > 0 and seconds or nil
+  UpdateBoxes()
+  Refresh()
+end
+
+-- small seconds box right of a position dropdown
+local function CreateHoldBox(row)
+  local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+  box:SetSize(32, 20)
+  box:SetPoint("LEFT", row.Control.Dropdown, "RIGHT", 14, 0)
+  box:SetAutoFocus(false)
+  box:SetNumeric(true)
+  box:SetMaxLetters(3)
+  box:SetJustifyH("CENTER")
+  local unit = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  unit:SetPoint("LEFT", box, "RIGHT", 4, 0)
+  unit:SetText("s")
+  box:SetScript("OnEnterPressed", box.ClearFocus)
+  box:SetScript("OnEscapePressed", function(self)
+    UpdateBox(self)
+    self:ClearFocus()
+  end)
+  box:SetScript("OnEditFocusLost", function(self)
+    local id = self.key and ns.Get(self.key)
+    if id and id ~= 0 then
+      SetHold(id, tonumber(self:GetText()) or 0)
+    end
+  end)
+  box:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Hold time")
+    GameTooltip:AddLine("Seconds this trinket stays equipped after its use, also counted"
+      .. " during combat; 0 = swap as soon as possible", 1, 1, 1, true)
+    GameTooltip:Show()
+    if self.key then
+      ShowItemTip(GameTooltip, self.key)
+    end
+  end)
+  box:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+    itemTip:Hide()
+  end)
+  holdBoxes[row] = box
+  return box
+end
+
+-- add the hold time box to position rows of the settings page as they are shown
+local function OnRowInit(row)
+  local setting = row:GetSetting()
+  local variable = setting and setting:GetVariable() or ""
+  local key = positionKeys[variable]
+  local box = holdBoxes[row]
+  -- own dropdowns without stepper arrows but wider; recycled rows get the defaults back
+  if variable:sub(1, #ADDON + 1) == ADDON .. "_" then
+    row.Control:SetSteppersShown(false)
+    row.Control.Dropdown:SetWidth(WIDE_DROPDOWN)
+    widened[row] = true
+  elseif widened[row] then
+    row.Control:SetSteppersShown(true)
+    row.Control.Dropdown:SetWidth(DEFAULT_DROPDOWN)
+    widened[row] = nil
+  end
+  if not key then
+    if box then
+      box.key = nil
+      box:Hide()
+    end
+    return
+  end
+  box = box or CreateHoldBox(row)
+  box.key = key
+  UpdateBox(box)
+end
+if SettingsDropdownControlMixin then
+  hooksecurefunc(SettingsDropdownControlMixin, "Init", OnRowInit)
+end
+
+-- item tooltip above the settings tooltip of a position row, hidden with it
+if SettingsTooltip then
+  SettingsTooltip:HookScript("OnShow", function(self)
+    local key = RowKey(self:GetOwner())
+    if key then
+      ShowItemTip(self, key)
+    end
+  end)
+  SettingsTooltip:HookScript("OnHide", function()
+    itemTip:Hide()
+  end)
+end
+
+-- copy the edited set's lists into the position settings and redraw the page
 local function ShowSet()
   local lists = Lists(ns.Get("editSet"))
   loading = true
@@ -279,7 +461,6 @@ local function ShowSet()
     for position = 1, POSITIONS do
       local key = Key(slot, position)
       local value = lists[slot][position] or 0
-      ns.db[key] = value
       ns.char[key] = value
       if registered then
         Settings.NotifyUpdate(ADDON .. "_" .. key)
@@ -287,6 +468,7 @@ local function ShowSet()
     end
   end
   loading = false
+  UpdateBoxes()
 end
 
 -- store a slot list of the edited set, then update page and equipment
@@ -322,7 +504,9 @@ local function PrintLists(key)
   for _, slot in ipairs(SLOTS) do
     local names = {}
     for index, id in ipairs(lists[slot]) do
+      local hold = ns.char.hold[id]
       names[index] = index .. ". " .. ItemText(id)
+        .. (hold and ns.Color("muted", " (hold " .. hold .. " s)") or "")
     end
     local text = #names > 0 and table.concat(names, ", ") or ns.Color("muted", "empty, not swapped")
     ns.Detail(ns.Color("command", SLOT_NAMES[slot]) .. ": " .. text)
@@ -336,7 +520,7 @@ local function Status()
     hint = ns.Color("warning", " (swaps after combat)")
   end
   ns.Print("swapping " .. ns.OnOff(ns.Get("enabled")) .. hint)
-  ns.Status("per character", ns.OnOff(ns.char.perCharacter))
+  ns.Status("pause while mounted", ns.OnOff(ns.Get("mountPause")))
   ns.Status("active set", SetName(ActiveKey()))
   ns.Status("edited set", SetName(ns.Get("editSet")))
   PrintLists(ns.Get("editSet"))
@@ -345,12 +529,6 @@ end
 -- switch swapping and report the new state
 local function Switch(enabled)
   ns.Set("enabled", enabled)
-  Status()
-end
-
--- switch per-character settings and report the new state
-local function PerCharacter(enabled)
-  ns.Set("perCharacter", enabled)
   Status()
 end
 
@@ -467,6 +645,11 @@ function events.PLAYER_EQUIPMENT_CHANGED()
   Refresh()
 end
 
+-- mounted or dismounted; after dismounting, mount gear addons swap back first
+function events.PLAYER_MOUNT_DISPLAY_CHANGED()
+  Schedule(1)
+end
+
 -- zoning
 function events.PLAYER_ENTERING_WORLD()
   Refresh()
@@ -497,27 +680,55 @@ frame:SetScript("OnEvent", function(_, event, ...)
   events[event](...)
 end)
 
--- trinket sets with their slot lists and the active set, per character
-ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT }, nil, "char")
-
--- saved settings: off, default set edited, empty positions
-local defaults = { enabled = false, editSet = DEFAULT }
+-- everything is saved per character: settings (off, no mount pause, default set edited,
+-- empty positions), trinket sets, active set, and hold times by item; _version 1 marks
+-- data from before settings moved out of the account store
+local defaults = {
+  _version = 1, enabled = false, mountPause = false, editSet = DEFAULT,
+  sets = {}, activeSet = DEFAULT, hold = {},
+}
 for _, slot in ipairs(SLOTS) do
   for position = 1, POSITIONS do
     defaults[Key(slot, position)] = 0
   end
 end
+ns.Store(ADDON .. "CharDB", defaults, nil, "char")
 
--- saved state; settings page and first check once loaded
-ns.Store(ADDON .. "DB", defaults, function()
+-- take the switches over from the account store once; trinket lists were always per
+-- character
+local function Migrate()
+  local char = ns.char
+  if char._version < 2 then
+    for _, key in ipairs({ "enabled", "mountPause" }) do
+      if not char.perCharacter and ns.db[key] ~= nil then
+        char[key] = ns.db[key]
+      end
+    end
+    char.perCharacter = false
+    char._version = 2
+  end
+end
+
+-- account store only kept for the migration; settings page and first check once loaded
+ns.Store(ADDON .. "DB", {}, function()
+  Migrate()
   RebuildSetChoices()
   RebuildItemChoices()
   ShowSet()
   ns.Settings()
+  -- this addon is always per character: hide the shared "Per character" checkbox, which
+  -- ns.Settings() adds first
+  local initializers = SettingsPanel:GetLayout(ns.Category):GetInitializers()
+  initializers[1]:AddShownPredicate(function()
+    return false
+  end)
   ns.Checkbox("enabled", "Enabled", "Swap trinkets by priority whenever out of combat", Refresh)
+  ns.Checkbox("mountPause", "Pause while mounted",
+    "No swaps while mounted, so addons that equip mount gear are not disturbed", Refresh)
   ns.Dropdown("editSet", "Trinket set", setChoices,
     "Trinket set shown below; each equipment set has its own, Default is used without one",
     OnEditSet)
+  -- the layout gets each dropdown last, so its initializer can get a shown rule
   for _, slot in ipairs(SLOTS) do
     for position = 1, POSITIONS do
       ns.Dropdown(Key(slot, position), SLOT_NAMES[slot] .. " priority " .. position, itemChoices,
@@ -527,6 +738,10 @@ ns.Store(ADDON .. "DB", defaults, function()
         function()
           OnPosition(slot, position)
         end)
+      -- shown up to one empty position after the filled ones
+      initializers[#initializers]:AddShownPredicate(function()
+        return position <= #Lists(ns.Get("editSet"))[slot] + 1
+      end)
     end
   end
   registered = true
@@ -543,6 +758,15 @@ end
 ns.Command({ name = "on", help = "turn swapping on", run = function() Switch(true) end })
 ns.Command({ name = "off", help = "turn swapping off", run = function() Switch(false) end })
 ns.Command({
+  name = "mount",
+  help = "pause swaps while mounted, or swap also when mounted",
+  args = { { name = "state", choices = { "on", "off" } } },
+  run = function(args)
+    ns.Set("mountPause", args.state == "on")
+    Status()
+  end,
+})
+ns.Command({
   name = "set",
   help = "edit the trinket set of an equipment set (\"quoted name\" or default); lists sets",
   args = { { name = "name", optional = true } },
@@ -555,13 +779,19 @@ ns.Command({
   run = SetList,
 })
 ns.Command({
-  name = "character",
-  help = "use settings for this character only, or the account's",
-  args = { { name = "state", choices = { "on", "off" } } },
-  run = function(args) PerCharacter(args.state == "on") end,
+  name = "hold",
+  help = "seconds a trinket stays equipped after its use; 0 removes the hold time",
+  args = {
+    { name = "itemID", type = "number", min = 1 },
+    { name = "seconds", type = "number", min = 0, max = 999 },
+  },
+  run = function(args)
+    SetHold(args.itemID, math.floor(args.seconds))
+    ns.Status("hold time of " .. ItemText(args.itemID), math.floor(args.seconds) .. " s")
+  end,
 })
 ns.Command({ name = "test", help = "check the trinket lists and swap once now", run = Test })
-ns.Command({ name = "reset", help = "reset the active profile's settings to defaults", run = Reset })
+ns.Command({ name = "reset", help = "reset the settings to defaults", run = Reset })
 ns.Command({
   name = "debug",
   help = "show what the addon does in chat, until /reload",
