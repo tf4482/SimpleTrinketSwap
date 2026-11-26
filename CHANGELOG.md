@@ -19,6 +19,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - All settings are saved per character; account values are taken over once
 - Wider dropdowns on the settings page, without the arrows beside them
 
+### Fixed
+
+- Lua error on loading when a listed trinket's data was not cached yet
+
 ### Removed
 
 - The "Per character" checkbox and `/sts character`

@@ -79,7 +79,7 @@ local function ItemText(id)
   local name = C_Item.GetItemNameByID(id)
   if not name then
     requested[id] = true
-    C_Item.RequestLoadItemData(id)
+    C_Item.RequestLoadItemDataByID(id)
     name = "item " .. id
   end
   return "|T" .. (C_Item.GetItemIconByID(id) or 134400) .. ":0|t " .. name
