@@ -29,7 +29,7 @@ are out of combat.
 
 ## Screenshots
 
-No screenshots yet.
+![Settings page with priority lists, hold times, and item tooltip](docs/settings.png)
 
 ## Install
 
