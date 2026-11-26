@@ -79,7 +79,7 @@ local function ItemText(id)
   local name = C_Item.GetItemNameByID(id)
   if not name then
     requested[id] = true
-    C_Item.RequestLoadItemData(id)
+    C_Item.RequestLoadItemDataByID(id)
     name = "item " .. id
   end
   return "|T" .. (C_Item.GetItemIconByID(id) or 134400) .. ":0|t " .. name
@@ -308,6 +308,11 @@ for _, slot in ipairs(SLOTS) do
 end
 -- hold time box by settings row frame; rows are recycled, so each box follows its row
 local holdBoxes = {}
+-- dropdown width of settings rows: Blizzard's, and ours a bit wider than it with arrows
+local DEFAULT_DROPDOWN = 220
+local WIDE_DROPDOWN = 290
+-- settings rows whose dropdown this addon widened
+local widened = {}
 
 -- item tooltip shown above the info tooltip of a position row
 local itemTip = CreateFrame("GameTooltip", ADDON .. "ItemTooltip", UIParent, "GameTooltipTemplate")
@@ -367,7 +372,7 @@ end
 local function CreateHoldBox(row)
   local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
   box:SetSize(32, 20)
-  box:SetPoint("LEFT", row.Control.IncrementButton, "RIGHT", 14, 0)
+  box:SetPoint("LEFT", row.Control.Dropdown, "RIGHT", 14, 0)
   box:SetAutoFocus(false)
   box:SetNumeric(true)
   box:SetMaxLetters(3)
@@ -407,8 +412,19 @@ end
 -- add the hold time box to position rows of the settings page as they are shown
 local function OnRowInit(row)
   local setting = row:GetSetting()
-  local key = setting and positionKeys[setting:GetVariable()]
+  local variable = setting and setting:GetVariable() or ""
+  local key = positionKeys[variable]
   local box = holdBoxes[row]
+  -- own dropdowns without stepper arrows but wider; recycled rows get the defaults back
+  if variable:sub(1, #ADDON + 1) == ADDON .. "_" then
+    row.Control:SetSteppersShown(false)
+    row.Control.Dropdown:SetWidth(WIDE_DROPDOWN)
+    widened[row] = true
+  elseif widened[row] then
+    row.Control:SetSteppersShown(true)
+    row.Control.Dropdown:SetWidth(DEFAULT_DROPDOWN)
+    widened[row] = nil
+  end
   if not key then
     if box then
       box.key = nil
