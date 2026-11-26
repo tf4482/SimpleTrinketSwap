@@ -20,8 +20,8 @@ are out of combat.
 - **Trinket sets** - one set per equipment set of the game's equipment manager; equipping
   an equipment set activates its trinket set. Without equipment sets there is only the
   Default set.
-- **Remembered** - settings are saved per account, or per character with one checkbox;
-  default is off. Trinket sets are always saved per character.
+- **Remembered** - all settings and trinket sets are saved per character; swapping is off
+  by default.
 - **Settings page** - all options, including the lists, in the game menu under
   Options > AddOns, also opened from the addon compartment menu; hovering a trinket shows
   its item tooltip above the help text.
@@ -49,8 +49,6 @@ No screenshots yet.
 /sts set <name|default>     edit the trinket set of an equipment set
 /sts slot <1|2> [id ...]    replace a slot list with up to ten item IDs; none clears it
 /sts hold <id> <seconds>    keep a trinket equipped that long after its use; 0 = off
-/sts character on           use settings for this character only
-/sts character off          use the account settings again
 /sts test                   check the lists and swap once now
 /sts reset                  reset the settings to defaults; trinket lists stay
 /sts debug on               show what the addon does, until /reload

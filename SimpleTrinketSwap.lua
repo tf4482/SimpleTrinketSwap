@@ -437,8 +437,7 @@ if SettingsTooltip then
   end)
 end
 
--- copy the edited set's lists into the position settings and redraw the page; both
--- profiles get the same values, so a profile switch keeps the lists
+-- copy the edited set's lists into the position settings and redraw the page
 local function ShowSet()
   local lists = Lists(ns.Get("editSet"))
   loading = true
@@ -446,7 +445,6 @@ local function ShowSet()
     for position = 1, POSITIONS do
       local key = Key(slot, position)
       local value = lists[slot][position] or 0
-      ns.db[key] = value
       ns.char[key] = value
       if registered then
         Settings.NotifyUpdate(ADDON .. "_" .. key)
@@ -506,7 +504,6 @@ local function Status()
     hint = ns.Color("warning", " (swaps after combat)")
   end
   ns.Print("swapping " .. ns.OnOff(ns.Get("enabled")) .. hint)
-  ns.Status("per character", ns.OnOff(ns.char.perCharacter))
   ns.Status("pause while mounted", ns.OnOff(ns.Get("mountPause")))
   ns.Status("active set", SetName(ActiveKey()))
   ns.Status("edited set", SetName(ns.Get("editSet")))
@@ -516,12 +513,6 @@ end
 -- switch swapping and report the new state
 local function Switch(enabled)
   ns.Set("enabled", enabled)
-  Status()
-end
-
--- switch per-character settings and report the new state
-local function PerCharacter(enabled)
-  ns.Set("perCharacter", enabled)
   Status()
 end
 
@@ -673,23 +664,48 @@ frame:SetScript("OnEvent", function(_, event, ...)
   events[event](...)
 end)
 
--- trinket sets with their slot lists, the active set, and hold times by item, per character
-ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT, hold = {} }, nil, "char")
-
--- saved settings: off, no mount pause, default set edited, empty positions
-local defaults = { enabled = false, mountPause = false, editSet = DEFAULT }
+-- everything is saved per character: settings (off, no mount pause, default set edited,
+-- empty positions), trinket sets, active set, and hold times by item; _version 1 marks
+-- data from before settings moved out of the account store
+local defaults = {
+  _version = 1, enabled = false, mountPause = false, editSet = DEFAULT,
+  sets = {}, activeSet = DEFAULT, hold = {},
+}
 for _, slot in ipairs(SLOTS) do
   for position = 1, POSITIONS do
     defaults[Key(slot, position)] = 0
   end
 end
+ns.Store(ADDON .. "CharDB", defaults, nil, "char")
 
--- saved state; settings page and first check once loaded
-ns.Store(ADDON .. "DB", defaults, function()
+-- take the switches over from the account store once; trinket lists were always per
+-- character
+local function Migrate()
+  local char = ns.char
+  if char._version < 2 then
+    for _, key in ipairs({ "enabled", "mountPause" }) do
+      if not char.perCharacter and ns.db[key] ~= nil then
+        char[key] = ns.db[key]
+      end
+    end
+    char.perCharacter = false
+    char._version = 2
+  end
+end
+
+-- account store only kept for the migration; settings page and first check once loaded
+ns.Store(ADDON .. "DB", {}, function()
+  Migrate()
   RebuildSetChoices()
   RebuildItemChoices()
   ShowSet()
   ns.Settings()
+  -- this addon is always per character: hide the shared "Per character" checkbox, which
+  -- ns.Settings() adds first
+  local initializers = SettingsPanel:GetLayout(ns.Category):GetInitializers()
+  initializers[1]:AddShownPredicate(function()
+    return false
+  end)
   ns.Checkbox("enabled", "Enabled", "Swap trinkets by priority whenever out of combat", Refresh)
   ns.Checkbox("mountPause", "Pause while mounted",
     "No swaps while mounted, so addons that equip mount gear are not disturbed", Refresh)
@@ -697,7 +713,6 @@ ns.Store(ADDON .. "DB", defaults, function()
     "Trinket set shown below; each equipment set has its own, Default is used without one",
     OnEditSet)
   -- the layout gets each dropdown last, so its initializer can get a shown rule
-  local initializers = SettingsPanel:GetLayout(ns.Category):GetInitializers()
   for _, slot in ipairs(SLOTS) do
     for position = 1, POSITIONS do
       ns.Dropdown(Key(slot, position), SLOT_NAMES[slot] .. " priority " .. position, itemChoices,
@@ -759,14 +774,8 @@ ns.Command({
     ns.Status("hold time of " .. ItemText(args.itemID), math.floor(args.seconds) .. " s")
   end,
 })
-ns.Command({
-  name = "character",
-  help = "use settings for this character only, or the account's",
-  args = { { name = "state", choices = { "on", "off" } } },
-  run = function(args) PerCharacter(args.state == "on") end,
-})
 ns.Command({ name = "test", help = "check the trinket lists and swap once now", run = Test })
-ns.Command({ name = "reset", help = "reset the active profile's settings to defaults", run = Reset })
+ns.Command({ name = "reset", help = "reset the settings to defaults", run = Reset })
 ns.Command({
   name = "debug",
   help = "show what the addon does in chat, until /reload",

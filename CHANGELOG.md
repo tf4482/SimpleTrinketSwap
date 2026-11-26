@@ -16,6 +16,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Changed
 
 - The settings page shows one empty priority position more than are filled, up to ten
+- All settings are saved per character; account values are taken over once
+
+### Removed
+
+- The "Per character" checkbox and `/sts character`
 
 ## [0.1.0] - 2026-11-24
 
