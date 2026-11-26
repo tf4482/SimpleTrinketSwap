@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Item tooltip above the help tooltip of each trinket on the settings page
 - Option to pause swaps while mounted, for addons that equip mount gear
 
+### Changed
+
+- The settings page shows one empty priority position more than are filled, up to ten
+
 ## [0.1.0] - 2026-11-24
 
 ### Added

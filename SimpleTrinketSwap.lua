@@ -5,8 +5,8 @@ local ADDON, ns = ...
 -- trinket inventory slots and their labels
 local SLOTS = { 13, 14 }
 local SLOT_NAMES = { [13] = "Trinket 1", [14] = "Trinket 2" }
--- priority positions per slot list on the settings page
-local POSITIONS = 5
+-- priority positions per slot list; the settings page shows one more than are filled
+local POSITIONS = 10
 -- equipping starts a 30 s cooldown, so less remaining counts as ready
 local READY = 30
 -- key of the trinket set used without an active equipment set
@@ -696,6 +696,8 @@ ns.Store(ADDON .. "DB", defaults, function()
   ns.Dropdown("editSet", "Trinket set", setChoices,
     "Trinket set shown below; each equipment set has its own, Default is used without one",
     OnEditSet)
+  -- the layout gets each dropdown last, so its initializer can get a shown rule
+  local initializers = SettingsPanel:GetLayout(ns.Category):GetInitializers()
   for _, slot in ipairs(SLOTS) do
     for position = 1, POSITIONS do
       ns.Dropdown(Key(slot, position), SLOT_NAMES[slot] .. " priority " .. position, itemChoices,
@@ -705,6 +707,10 @@ ns.Store(ADDON .. "DB", defaults, function()
         function()
           OnPosition(slot, position)
         end)
+      -- shown up to one empty position after the filled ones
+      initializers[#initializers]:AddShownPredicate(function()
+        return position <= #Lists(ns.Get("editSet"))[slot] + 1
+      end)
     end
   end
   registered = true

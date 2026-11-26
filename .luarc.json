@@ -30,6 +30,7 @@
     "EquipItemByName",
     "GameTooltip",
     "SettingsDropdownControlMixin",
+    "SettingsPanel",
     "SettingsTooltip",
     "UIParent",
     "GetInventoryItemID",
