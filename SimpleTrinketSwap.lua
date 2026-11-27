@@ -415,13 +415,11 @@ local function OnRowInit(row)
   local variable = setting and setting:GetVariable() or ""
   local key = positionKeys[variable]
   local box = holdBoxes[row]
-  -- own dropdowns without stepper arrows but wider; recycled rows get the defaults back
+  -- own dropdowns wider, as their arrows are hidden; recycled rows get the default back
   if variable:sub(1, #ADDON + 1) == ADDON .. "_" then
-    row.Control:SetSteppersShown(false)
     row.Control.Dropdown:SetWidth(WIDE_DROPDOWN)
     widened[row] = true
   elseif widened[row] then
-    row.Control:SetSteppersShown(true)
     row.Control.Dropdown:SetWidth(DEFAULT_DROPDOWN)
     widened[row] = nil
   end
@@ -712,6 +710,8 @@ ns.Store(ADDON .. "DB", defaults, function()
   ns.Dropdown("editSet", "Trinket set", setChoices,
     "Trinket set shown below; each equipment set has its own, Default is used without one",
     OnEditSet)
+  -- no stepper arrows: Blizzard hides them on every redraw for this initializer flag
+  initializers[#initializers].data.forceSteppersHidden = true
   -- the layout gets each dropdown last, so its initializer can get a shown rule
   for _, slot in ipairs(SLOTS) do
     for position = 1, POSITIONS do
@@ -723,6 +723,7 @@ ns.Store(ADDON .. "DB", defaults, function()
           OnPosition(slot, position)
         end)
       -- shown up to one empty position after the filled ones
+      initializers[#initializers].data.forceSteppersHidden = true
       initializers[#initializers]:AddShownPredicate(function()
         return position <= #Lists(ns.Get("editSet"))[slot] + 1
       end)
