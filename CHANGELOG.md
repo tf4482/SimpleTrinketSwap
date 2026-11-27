@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [0.2.3] - 2026-11-27
 
+### Changed
+
+- Settings are saved only in each character's own data again; a character that never
+  switched swapping itself may start with it off once, `/sts on` turns it back on
+
 ### Fixed
 
 - Arrows beside the priority dropdowns came back and covered the hold time boxes
