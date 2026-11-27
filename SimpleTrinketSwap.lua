@@ -665,28 +665,28 @@ frame:SetScript("OnEvent", function(_, event, ...)
   events[event](...)
 end)
 
--- trinket sets with their slot lists, the active set, and hold times by item, per character
-ns.Store(ADDON .. "CharDB", { sets = {}, activeSet = DEFAULT, hold = {} }, nil, "char")
-
--- setting defaults: off, no mount pause, default set edited, empty positions; the values
--- themselves are saved per character, see below
-local defaults = { enabled = false, mountPause = false, editSet = DEFAULT }
+-- everything is saved per character, outside the profile switch: settings (off, no mount
+-- pause, default set edited, empty positions), trinket sets with their slot lists, the
+-- active set, and hold times by item
+local defaults = {
+  enabled = false, mountPause = false, editSet = DEFAULT,
+  sets = {}, activeSet = DEFAULT, hold = {},
+}
 for _, slot in ipairs(SLOTS) do
   for position = 1, POSITIONS do
     defaults[Key(slot, position)] = 0
   end
 end
+ns.Store(ADDON .. "CharDB", defaults, nil, "char")
 
--- settings page and first check once loaded
-ns.Store(ADDON .. "DB", defaults, function()
-  -- this addon is always per character: the shared profile switch stays on, so settings
-  -- live in the character store; unset ones fall back to account values of older versions
-  ns.char.perCharacter = true
+-- account store, needed by the settings component; settings page and first check once loaded
+ns.Store(ADDON .. "DB", {}, function()
   RebuildSetChoices()
   RebuildItemChoices()
   ShowSet()
   ns.Settings()
-  -- hide the shared "Per character" checkbox, which ns.Settings() adds first
+  -- this addon is always per character: hide the shared "Per character" checkbox, which
+  -- ns.Settings() adds first
   local initializers = SettingsPanel:GetLayout(ns.Category):GetInitializers()
   initializers[1]:AddShownPredicate(function()
     return false
